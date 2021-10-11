@@ -1,0 +1,2 @@
+desc: Sample code for a pci device capturing external data to its registers.
+name: PCI data capture

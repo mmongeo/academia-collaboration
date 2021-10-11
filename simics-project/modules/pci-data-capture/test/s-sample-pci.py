@@ -20,7 +20,7 @@ pci_bus = SIM_create_object('pci-bus', 'pci_bus', [['conf_space', pci_conf],
                                                    ['memory_space', pci_mem],
                                                    ['bridge', pci_bridge.obj]])
 
-pci = SIM_create_object('sample_pci_device', 'sample_pci',
+pci = SIM_create_object('pci_data_capture', 'pci_data_capture',
                         [['pci_bus', pci_bus]])
 
 # Test the PCI vendor and device IDs

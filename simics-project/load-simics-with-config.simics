@@ -1,0 +1,6 @@
+$disk0_image = "qsp.craff"
+
+run-command-file "targets/qsp-x86/custom-target.simics"
+
+pci_capture.log-level 4
+pci_capture.dev->input = "/<path>/<to>/snail.bmp"

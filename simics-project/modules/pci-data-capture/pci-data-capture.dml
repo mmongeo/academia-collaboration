@@ -39,6 +39,10 @@ is pci_device;
 
 
 param pci_hotplug = true;
+
+// constant size of buffer
+param BUFFER_SIZE = 196666;
+
 //variable with the file handle
 session FILE * file;
 
@@ -86,7 +90,7 @@ bank pci_config {
     register device_id { param init_val = 0xAC10; } // PC Card Controller
 
     register base_address_0 @ 0x10 is (memory_base_address_32) {
-        param size_bits = 8;
+        param size_bits = 18;
         param map_func = 1;
     }
     register base_address_1 @ 0x14 is (no_base_address_32);
@@ -96,25 +100,35 @@ bank pci_config {
     register base_address_5 @ 0x24 is (no_base_address_32);
 }
 
-bank reg is function_mapped_bank {
+bank regs is function_mapped_bank {
     /* Each register bank need to have a unique function number,
        which should match with the map_func param in one BAR */
     param function = 1;
+
+    register test_register size 4 @ 0x0 {
+        param init_val = 0x0;
+    }
+
+    register buf_size size 4 @ 0x4 {
+        param init_val = BUFFER_SIZE;
+    }
     
     //when command register is written with a 1 then the device outputs current data 
     //stored in the input attribute
-    register cmd size 4 @ 0x0014 {
+    register cmd size 4 @ 0x14 {
         is write;
         param init_val = 0x0;
         
         //called on write by the processor
         method write(uint64 value) {
-            local uint8 index = 0;
+            local uint32 index = 0;
             if (value == 0x1) {
                 if(input.val != NULL) {
                     file = fopen(input.val, "r");
-                    for (index = 0; index < 8; index++) {
-                        character[index].set_val(fgetc(file));
+                    for (index = 0; index < BUFFER_SIZE; index++) {
+                        local uint8 char_read = fgetc(file);
+                        buffer[index].set_val(char_read);
+                        log info, 4: "loaded val = 0x%x @ buffer[%d]", char_read, index;
                     }
                     fclose(file);
 		        }
@@ -122,10 +136,9 @@ bank reg is function_mapped_bank {
 
         }
     }
+    
     //for communicating initial 8 bytes of the file after command=1 and input attr value is populated
-    register character[i < 8] size 1 @ 0x0018 + i {
-        is read_only;
+    register buffer[i < BUFFER_SIZE] size 1 @ 0x18 + i {
         param init_val = 0x0;
     }
-
 }

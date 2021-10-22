@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include<sys/ioctl.h>
+#include <sys/ioctl.h>
 
 #define CHARACTER_DEVICE_DRIVER_PATH "/dev/pci_capture_chr_dev-0"
 #define WR_VALUE _IOW('a','a',int32_t *)

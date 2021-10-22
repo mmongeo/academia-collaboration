@@ -9,6 +9,10 @@ Steps:
 4. make "device_name" from project workspace.
 
 Driver steps:
+
+PCI Driver Presentation link: [PCI-Driver](https://drive.google.com/file/d/130z67GF9dVOsVsGkzWpdofGcLA3bqxIQ/view?usp=sharing)
+
 1. Download the craff image from here: [Craff link](https://drive.google.com/file/d/1Hrl3ZlBgfXd_BiBZwEvxHkptiOIPQ2gs/view?usp=sharing)
 2. Upload the files of the driver using agent-manager to the OS inside Simics.
 3. Compile with make and install the .ko file.
+

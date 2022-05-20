@@ -13,5 +13,11 @@ instantiate-components
 #board.mb.sb.ext_mem.map
 #board.mb.sb.ext_mem.write 0xf1000000 + 0x14 0x1 0x4
 #pci_capture.dev.bank.regs->buffer
-
-
+script-branch {
+    board.serconsole.con.bp-wait-for-console-string "simics@cl-qsp"
+    board.mb.sb.ext_mem->map = []
+    $map = (board.mb.sb.ext_conf->map)
+    board.mb.sb.ext_conf.write address = $map[0][0] + 0x10 value = 0xf1000000
+    board.mb.sb.ext_conf.write address = $map[0][0] + 0x4 value = 3
+    echo "Done setting device for test"
+}

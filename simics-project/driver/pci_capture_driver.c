@@ -19,15 +19,9 @@
 #define MAX_CHR_DEV 1                                       // amount of character devices
 #define MAX_BUFFER_DATA_LEN 30                              // max length of buffer
 
-// PCI device offsets
-#define PCI_DEVICE_BUFFER_OFFSET 0x18                       // offset of buffer registers in PCI device
-#define PCI_DEVICE_COMMAND_OFFSET 0x14                      // offset of command register
-
 /* IOCTL */
 #define WR_VALUE _IOW('a', 'a', int32_t *)
 #define RD_VALUE _IOR('b', 'b', int32_t *)
-#define READ_VALUE_FROM_PCI_DEVICE _IOR('c', 'c', int32_t *)
-#define LOAD_PICTURE _IOR('d', 'd', int32_t *)
 
 /***************************************************************************************************************/
 /* Driver functions */
@@ -94,8 +88,8 @@ static struct file_operations pci_capture_chr_dev_registration = {
 /***************************************************************************************************************/
 // here you can add whatever function you need
 // for example
-u8 read_device_at_offset(uint32_t offset);
-void write_command_to_pci_device(uint32_t command);
+uint32_t read_test_register(void);
+void write_test_register(uint32_t value);
 /***************************************************************************************************************/
 /* Global variables */
 /***************************************************************************************************************/
@@ -115,7 +109,6 @@ struct character_device_internal_data {
 static int dev_major = MAJOR_NUMBER;
 static struct class *character_device_class = NULL;
 static struct character_device_internal_data chr_dev_data[MAX_CHR_DEV];
-int32_t ioctl_buffer;
 /***************************************************************************************************************/
 /* Functions definitions */
 /***************************************************************************************************************/
@@ -204,31 +197,6 @@ static void unregister_pci_capture_chr_dev(void) {
     unregister_chrdev_region(MKDEV(dev_major, 0), MINORMASK);
 }
 
-/* test function */
-/* Write some data to the device */
-void write_sample_data(struct pci_dev *pdev)
-{
-    int data_to_write = 0xDEADBEEF; /* Just a random trash */
-    struct pci_driver_internal_data *pci_capture_data = (struct pci_driver_internal_data *) pci_get_drvdata(pdev);
-    
-    u32 data_read = (u32) ioread32(pci_capture_data->hwmem + 0x4);
-
-    if (!pci_capture_data) {
-        printk(" >> test: writing some values. pci_driver_internal_data error");
-        return;
-    }
-
-    /* Write 32-bit data to the device memory */
-    printk(" >>> write_sample_data to BAR0 @ 0x0");
-    iowrite32(data_to_write, pci_capture_data->hwmem);
-
-    printk(" >>> read BAR0 @ 0x18");
-    ioread8(pci_capture_data->hwmem + 0x4);
-
-    printk(" >>> read BAR0 @ 0x%x", 0x18 + data_read - 1);
-    ioread8(pci_capture_data->hwmem + 0x18 + data_read - 1);
-}
-
 /***************************************************************************************************************/
 /* Function for enabling PCI-Express driver */
 /***************************************************************************************************************/
@@ -290,7 +258,6 @@ static int probe_pci_capture_driver(struct pci_dev *pdev, const struct pci_devic
     /* Now we can access mapped "hwmem" from any driver's function */
     pci_set_drvdata(pdev, pci_capture_data);
 
-    write_sample_data(pdev);
     pci_dev = pdev;
 
     return 0;
@@ -384,39 +351,31 @@ static ssize_t write_pci_capture_chr_dev(struct file *pfile, const char __user *
 
 static long ioctl_pci_capture_chr_dev(struct file *file, unsigned int cmd, unsigned long arg) {
     int error;
+    uint32_t buffer;
 
     switch (cmd) {
         case WR_VALUE:
-            error = copy_from_user(&ioctl_buffer, (int32_t *) arg, sizeof(ioctl_buffer));
+            error = copy_from_user(&buffer, (int32_t *) arg, sizeof(buffer));
             if (error != 0) {
-                printk("IOCTL write data failed. Error: %d\n", error);
+                printk(KERN_ERR "IOCTL write data failed. Error: %d", error);
             }
             else {
-                printk("IOCTL data received: %d\n", ioctl_buffer);
+                printk(KERN_INFO "IOCTL data received: 0x%x", buffer);
             }
+
+            write_test_register(buffer);
             break;
 
         case RD_VALUE:
-            error = copy_to_user((int32_t *) arg, &ioctl_buffer, sizeof(ioctl_buffer));
+            buffer = read_test_register();
+            error = copy_to_user((int32_t *) arg, &buffer, sizeof(buffer));
             if (error != 0) {
-                printk("IOCTL failed while sending data to user. Error: %d\n", error);
-            }
-            break;
-        
-        case READ_VALUE_FROM_PCI_DEVICE:
-            ioctl_buffer = (int32_t) read_device_at_offset(ioctl_buffer);
-            error = copy_to_user((int32_t *) arg, &ioctl_buffer, sizeof(ioctl_buffer));
-            if (error != 0) {
-                printk("IOCTL failed while sending data to user. Error: %d\n", error);
+                printk(KERN_ERR "IOCTL failed while sending data to user. Error: %d\n", error);
             }
             break;
 
-        case LOAD_PICTURE:
-            write_command_to_pci_device(1);
-            error = 0;
-            break;
         default:
-            printk("IOCTL command not recognized");
+            printk(KERN_ERR "IOCTL command not recognized");
             error = ENOTTY;
     }
     
@@ -431,22 +390,25 @@ static int uevent_pci_capture_chr_dev(struct device *dev, struct kobj_uevent_env
 /***************************************************************************************************************/
 /* Internal/Private functions definition */
 /***************************************************************************************************************/
-u8 read_device_at_offset(uint32_t offset) {
-    u8 ret;
+uint32_t read_test_register(void) {
+    uint32_t ret;
     struct pci_driver_internal_data *pci_capture_data;
+    uint32_t test_register_offset;
 
     pci_capture_data = (struct pci_driver_internal_data *) pci_get_drvdata(pci_dev);
-    ret = ioread8(pci_capture_data->hwmem + offset);
+    test_register_offset = 0x0;
+    ret = ioread32(pci_capture_data->hwmem + test_register_offset);
 
     return ret;
 }
 
-void write_command_to_pci_device(uint32_t command) {
+void write_test_register(uint32_t value) {
     struct pci_driver_internal_data *pci_capture_data;
-    pci_capture_data = (struct pci_driver_internal_data *) pci_get_drvdata(pci_dev);
+    uint32_t test_register_offset;
 
-    // writing command value to command register of PCI device
-    iowrite32(command, pci_capture_data->hwmem + PCI_DEVICE_COMMAND_OFFSET);
+    pci_capture_data = (struct pci_driver_internal_data *) pci_get_drvdata(pci_dev);
+    test_register_offset = 0x0;
+    iowrite32(value, pci_capture_data->hwmem + test_register_offset);
 }
 
 MODULE_LICENSE("GPL");

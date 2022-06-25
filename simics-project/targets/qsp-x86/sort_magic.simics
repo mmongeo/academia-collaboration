@@ -19,7 +19,7 @@ script-branch {
     $agent.wait-for-job
     new-instruction-histogram  name = histogram -connect-all
     histogram.enable-instrumentation
-    echo "START: Inside the simulated machine, traverse to the directory with the sort_magic: cd sort_magic.\nExecute the program with the included dataset to start: ./sort-magic.o dataset.txt" 
+    echo "START: Inside the simulated machine, traverse to the directory with the sort_magic: cd sort_magic.\nExecute the program with the included dataset to start: ./sort_magic.o dataset.txt" 
 }
 
 $enable_instrumentation_string = "Type in the console: histogram.clear to start remove any data and start the profiling."

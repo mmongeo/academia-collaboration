@@ -7,7 +7,9 @@ load-module x86-nehalem-comp
 load-module x86-comp
 #load a model for a simple dimm
 load-module memory-comp
-
+#load the tomasulo instrumentation tool 
+load-module tomasulo
+load-module tomasulo_connection_t
 #---- create the objects -----
 #create the dimm
 create-simple-memory-module memory_megs = 0x10000
@@ -26,5 +28,6 @@ connect processor0.socket cnt1 = "motherboard0.cpu[0]"
 instantiate-components
 
 #connect the instrumentation model for the tomasulo algorithm management
-
+new-tomasulo
+new-tomasulo name = tomasulo -connect-all
 #example of loading a binary image...

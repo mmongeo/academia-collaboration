@@ -19,6 +19,7 @@
 #include <simics/simulator-iface/instrumentation-tool.h>
 #include <simics/model-iface/cpu-instrumentation.h>
 #include <simics/device-api.h>
+//#include "xed/xed-interface.h"
 
 conf_class_t *connection_class;
 

@@ -20,9 +20,11 @@ SRC_FILES += tomasulo.c
 
 SIMICS_API := latest
 THREAD_SAFE = yes
+#XED_FOLDER contains the folder where XED was built, to get the libxed.a and the include files for this library
+XED_FOLDER := #need to populate this
 
-MODULE_CFLAGS += -I<<XedPath>> 
-MODULE_LDFLAGS += -lxed
+MODULE_CFLAGS += -I$(XED_FOLDER)/obj/ -I$(XED_FOLDER)/include/public/xed/
+MODULE_LDFLAGS += -L libxed
 
 
 include $(MODULE_MAKEFILE)

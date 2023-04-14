@@ -21,5 +21,8 @@ SRC_FILES += tomasulo.c
 SIMICS_API := latest
 THREAD_SAFE = yes
 
-include $(MODULE_MAKEFILE)
+MODULE_CFLAGS += -I<<XedPath>> 
+MODULE_LDFLAGS += -lxed
 
+
+include $(MODULE_MAKEFILE)

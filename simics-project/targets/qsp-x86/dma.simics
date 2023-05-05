@@ -1,0 +1,17 @@
+run-command-file "%script%/firststeps.simics"
+board.mb.cpu0.core[0][0].info
+run 2 s
+board.mb.phys_mem.map
+@SIM_create_object("dma_device", "dma", target_mem_space=conf.board.mb.phys_mem)
+
+#For further information turning all verbose for the DMA device
+dma.log-level 4
+
+#board.mb.phys_mem.add-map dma.bank.regs  0x250000000 0xc
+#board.mb.phys_mem.map
+#board.mb.phys_mem.write 0x250000004 0x20000
+#print-device-regs dma DMA_source
+#board.mb.phys_mem.write 0x250000008 0x30000
+#print-device-regs dma DMA_dest
+#$dma_control = 0x10000040
+#board.mb.phys_mem.write 0x250000000 $dma_control

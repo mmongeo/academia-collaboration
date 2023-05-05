@@ -1,0 +1,139 @@
+/*
+  © 2016 Intel Corporation
+*/
+
+// This is a DML device module to show an example on how to perform reads/write
+// to a memory_space
+
+dml 1.4;
+
+device dma_device;
+
+param desc = "example DMA device";
+
+param documentation =
+    "Example of a DMA device supporting contiguous memory or scatter-gather "
+    + "lists. The device has a controllable throughput (words per second) "
+    + "and supports either polling mode or interrupt based signalling upon "
+    + "DMA completion.";
+
+import "utility.dml";
+import "simics/devs/memory-space.dml";
+
+param byte_order = "big-endian";
+
+// Memory-space connection for DMA work
+connect target_mem_space {
+    param documentation =
+        "The memory space on which the DMA engine operates. Data will be "
+        + "read from and copied to the memory associated with this memory "
+        + "space.";
+    param configuration = "required";
+    interface memory_space;
+}
+
+bank regs {
+    param register_size = 4;
+    register DMA_control @ 0x00 "Control register";
+    register DMA_source  @ 0x04 "Source address";
+    register DMA_dest    @ 0x08 "Destination address";
+}
+
+// Read len bytes of target memory from the address src in the memory
+// $target_mem_space. The result is put in memory pointed to by dst,
+// which must be large enough to hold at least len bytes. If a memory
+// access error occurs this method will print an error message and
+// throw an exception.
+method read_mem(void *dst,
+                physical_address_t src,
+                physical_address_t len) throws {
+    local exception_type_t exc;
+    exc = target_mem_space.memory_space.access_simple(dev.obj,
+                                                src,
+                                                dst,
+                                                len,
+                                                Sim_RW_Read,
+                                                Sim_Endian_Target);
+
+    if (exc != Sim_PE_No_Exception) {
+        log error: "an error occurred when reading target memory";
+        throw;
+    }
+}
+
+// Write len bytes to target memory from the memory pointed to by
+// src. The data is written to the memory space $target_mem_space at
+// address dst. If a memory access error occurs this method will
+// print an error message and throw an exception.
+method write_mem(physical_address_t dst,
+                 const void *src,
+                 physical_address_t len) throws {
+    local exception_type_t exc;
+    exc = target_mem_space.memory_space.access_simple(dev.obj,
+                                                dst,
+                                                cast(src, uint8*),
+                                                len,
+                                                Sim_RW_Write,
+                                                Sim_Endian_Target);
+
+    if (exc != Sim_PE_No_Exception) {
+        log error: "an error occurred when writing to target memory";
+        throw;
+    }
+}
+
+bank regs {
+    register DMA_control {
+        field EN   @ [31]  "Enable DMA";
+        field SWT  @ [30]  "Software Transfer Trigger";
+        field ECI  @ [29]  is (unimpl) "Enable Completion Interrupt";
+        field TC   @ [28]  is (read_only)     "Transfer complete";
+        field SG   @ [27]  is (unimpl) "Scatter-gather list input";
+        field ERR  @ [26] "DMA transfer error";
+        field TS   @ [15:0] "Transfer size (32-bit words)";
+
+        method write_register(uint64 value, uint64 enabled_bytes, void *aux) {
+            default(value, enabled_bytes, aux);
+            do_dma_transfer();
+        }
+    }
+
+    method do_dma_transfer() {
+        if (DMA_control.SWT.val == 0)
+            return; // No need to do anything if we are not asked by software
+
+        // Software asked us to initiate a DMA transfer
+        if(DMA_control.EN.val == 0) {
+            // enable bit not set, so we cannot transfer
+            log info, 2: "SWT = 1 has no effect. DMA transfer can not be completed";
+            return;
+        }
+
+        log info, 3: "EN bit set, SWT written, initiating DMA";
+        log info, 3: "Transferring %d 32-bit words from 0x%x to 0x%x",
+            DMA_control.TS.val, DMA_source.val, DMA_dest.val;
+
+        local uint18 count = DMA_control.TS.val * 4;
+        try {
+            // Copy the memory block
+            local uint8 buf[count];
+            read_mem(buf, DMA_source.val, count);
+            write_mem(DMA_dest.val, buf, count);
+        } catch {
+            log error: "DMA memory access failed";
+            return;
+        }
+
+        complete_dma();
+    }
+
+    method complete_dma() {
+        // Log that completion is done
+        log info, 2: "DMA transfer completed";
+
+        // clear SWT bit, update TS
+        DMA_control.SWT.val = 0;
+        DMA_control.TS.val = 0;
+        DMA_control.TC.val = 1;
+    }
+}

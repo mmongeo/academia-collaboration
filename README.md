@@ -3,16 +3,13 @@ Contains Simics device model for basic data capture.
 A basic component and a basic target that loads with x86-qsp
 
 Requirements
- - Have Nasm and Xed installed 
+ - Have Nasm 
 
 Steps: 
 1. pull from repo. 
 2. cd to simics-project in the repo. 
 3. call project setup or use ispm to use this folder.
-4. go to modules/tomasulo/Makefile 
-5. change the <<XedPath>> with the path were xed was install
-6. go back to simics-project 
-7. make "device_name" from project workspace.
+4. make "device_name" from project workspace.
 
 Driver steps:
 PCI Driver Presentation link: [PCI-Driver-Presentation](https://drive.google.com/file/d/1HJH5QXc6Vq-CjpyutNHL_0jMnbwRRAA3/view?usp=sharing)

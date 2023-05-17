@@ -1,3 +1,6 @@
+#this is in case you want to run your program without the tomasulo algorithm
+if not defined activate_tomasulo {$activate_tomasulo = TRUE}
+
 output-radix 16
 #---- load the device components ----
 #load a simple Intel 64 processor model
@@ -27,7 +30,20 @@ connect processor0.socket cnt1 = "motherboard0.cpu[0]"
 #instantiate everything
 instantiate-components
 
-#connect the instrumentation model for the tomasulo algorithm management
-new-tomasulo
-new-tomasulo name = tomasulo -connect-all
+#connect the instrumentation model for the tomasulo
+if($activate_tomasulo == TRUE) {
+    new-tomasulo
+    new-tomasulo name = tomasulo -connect-all
+}
+#setup of all the segments needed. Code segment: CS, Data segment:DS, Stack segment: SS
+processor0.core[0][0]->cs[7] = 0
+processor0.core[0][0]->cs[0] = 0
+processor0.core[0][0]->rip = 0
+processor0.core[0][0]->ds[0] = 0
+processor0.core[0][0]->cs[0] = 0
+processor0.core[0][0]->ss[7] = 0xfff + 1
+processor0.core[0][0]->ss[0] = 0
+processor0.core[0][0]->ds[7] = 0xfff + 0xfff + 2
+
 #example of loading a binary image...
+load-file filename = example.bin offset = 0x0

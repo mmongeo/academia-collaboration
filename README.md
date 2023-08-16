@@ -2,6 +2,23 @@
 Contains Simics device model for basic data capture. 
 A basic component and a basic target that loads with x86-qsp
 
+*Workshop*
+Requirements
+ - Have Nasm 
+ - Have the 4096 pkg installed
+
+Steps for load the x86 file into Simics:
+1. Execute the following command 
+    nasm example.asm -o example.bin
+This will create a .bin file
+2. Start the Simics simulation
+3. Load the .bin file with the following command
+    load-file filename = example.bin offset = 0x0
+This will load and place the intructions at the offset
+NOTE: Currently the 3rd step is automated in the tomasulo.simics script but it is necessary to compile the .asm.
+4. In the Simics Control Menu, select Debug -> CPU Registers
+This is a register control panel, where changes are visible.
+
 *Tomasulo Project*
 Requirements
  - Have Nasm 
@@ -14,8 +31,7 @@ This will create a .bin file
 3. Load the .bin file with the following command
     load-file filename = example.bin offset = 0x0
 This will load and place the intructions at the offset
-NOTE: Currently the 3rd step is automated in the tomasulo.simics script but
-      it is necessary to compile the .asm.
+NOTE: Currently the 3rd step is automated in the tomasulo.simics script but it is necessary to compile the .asm.
 
 *PCI Device Project*
 Driver steps:

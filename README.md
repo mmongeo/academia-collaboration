@@ -9,11 +9,11 @@ Requirements
 
 Steps for load the x86 file into Simics:
 1. Execute the following command 
-    nasm example.asm -o example.bin
+    nasm example_fib.asm -o example_fib.bin
 This will create a .bin file
 2. Start the Simics simulation
 3. Load the .bin file with the following command
-    load-file filename = example.bin offset = 0x0
+    load-file filename = example_fib.bin offset = 0x0
 This will load and place the intructions at the offset
 NOTE: Currently the 3rd step is automated in the tomasulo.simics script but it is necessary to compile the .asm.
 4. In the Simics Control Menu, select Debug -> CPU Registers
@@ -25,11 +25,11 @@ Requirements
 
 Steps for load the x86 file into Simics:
 1. Execute the following command 
-    nasm example.asm -o example.bin
+    nasm example_tom.asm -o example_tom.bin
 This will create a .bin file
 2. Start the Simics simulation
 3. Load the .bin file with the following command
-    load-file filename = example.bin offset = 0x0
+    load-file filename = example_tom.bin offset = 0x0
 This will load and place the intructions at the offset
 NOTE: Currently the 3rd step is automated in the tomasulo.simics script but it is necessary to compile the .asm.
 

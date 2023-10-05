@@ -10,4 +10,4 @@ board.mb.cpu0.core[0][0]->ss[0] = 0
 board.mb.cpu0.core[0][0]->ds[7] = 0xfff + 0xfff + 2
 
 #example of loading a binary image...
-load-file filename = example.bin offset=0x0
+load-file filename = example_fib.bin offset=0x0

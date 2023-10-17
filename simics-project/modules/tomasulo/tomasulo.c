@@ -25,12 +25,14 @@
 #define MAX_STATIONS 10
 #define TYPE_LOAD 0
 #define TYPE_SUM 1
-#define LOAD_TIMEOUT 1
-#define SUM_TIMEOUT 2
+#define LOAD_TIMEOUT 3
+#define SUM_TIMEOUT 3
+#define REG_IN_PROGRAM 3
+#define REG_DEPENDENCY true
 
 conf_class_t *connection_class;
 
-/*This structure is used to create entries inside list of issued instructions*/
+/*This structure is used to create entries inside list of fetch instructions*/
 typedef struct {
     logical_address_t address;
     char * disassembled_text;
@@ -48,6 +50,11 @@ typedef struct {
     //you add more
     int type;
 } unit_functional_station;
+
+typedef struct {
+    char * name;
+    bool in_use;
+}reg_t;
 
 /* The connection (between tool and provider) 
  * This structure is the "Connection". In essense the structure for the state machine of tomasulo
@@ -68,13 +75,14 @@ typedef struct {
         bool stall;
         logical_address_t stall_address;
         bool skip_instruction;
-        instruction_entry issued_instructions[MAX_INST];
-        int issued_instruction_size;
+        instruction_entry fetch_instructions[MAX_INST];
+        int fetch_instruction_size;
         instruction_entry * finished_instructions[MAX_INST];
         int finished_instructions_size;
         unit_functional_station * stations[MAX_STATIONS];
         int total_reservation_stations;
         int cycles;
+        reg_t register_list[REG_IN_PROGRAM];
 } connection_t;
 
 /* The Simics instrumentation tool
@@ -152,15 +160,34 @@ ic_disable(conf_object_t *obj)
 
 }
 
+reg_t * get_instruction_register(conf_object_t * obj, char * instruction_reg ){
+    connection_t *conn = conn_of_obj(obj);
+    for (int i = 0; i < REG_IN_PROGRAM; ++i){        
+        if(conn->register_list[i].name != NULL){
+            if (strncmp(instruction_reg, conn->register_list[i].name, 2) == 0){
+                return &conn->register_list[i];
+            }
+        } else{
+            if (strncmp(instruction_reg,"0x",2)==0){
+                conn->register_list[i].name = "0x";
+                conn->register_list[i].in_use = false;
+                return &conn->register_list[i];
+            }
+            conn->register_list[i].name = instruction_reg;
+            return &conn->register_list[i];
+        }
+    }
+} 
+
 /*
  * Given a logical address as an input, it returns the instruction details at that logical address
- * that is part of the list of already issued instructions
+ * that is part of the list of already fetch instructions
  * */
 instruction_entry * get_instruction_details(conf_object_t * obj, logical_address_t address){
     connection_t *conn = conn_of_obj(obj);
     for (int i = 0; i < MAX_INST; ++i){
-        if(conn->issued_instructions[i].address == address){
-            return &conn->issued_instructions[i];
+        if(conn->fetch_instructions[i].address == address){
+            return &conn->fetch_instructions[i];
         }    
     }   
     return NULL;
@@ -210,7 +237,7 @@ void identify_instruction_and_operand(conf_object_t * obj, conf_object_t * cpu, 
             conn->finish = true; //tells the state machine to finish an instruction in this cycle at finished address
             conn->stations[i]->in_use = false; //since the instruction is finised, this engine is no longer busy
             conn->stall = false; //just in case we were stalling before
-            SIM_LOG_INFO(2, obj, 0, "I'm going to finishg something here: %x and return to: %x\n, index %i",  conn->finished_address , conn->restore_rip_address , i);
+            SIM_LOG_INFO(2, obj, 0, "I'm going to finishg here: %x and return to: %x\n, index %i",  conn->finished_address , conn->restore_rip_address , i);
             break;
         }  
     }
@@ -242,20 +269,132 @@ void identify_instruction_and_operand(conf_object_t * obj, conf_object_t * cpu, 
             }
         }
     }
-    //No station can take this instruction that was issued, we need to stall until they free up
+
+    //No station can take this instruction that was fetch, we need to stall until they free up
     if(!available_station_sum && !available_station_load && !conn->finish){
         SIM_LOG_INFO(1, obj, 0, "I need to stall");
         conn->stall = true;
         conn->stall_address = address; //we'll loop in the current RIP until some engine finished and removes the stall
         return;
     }
-
     /*Here you can add all the other stations that you want, they can follow the usage of the same APIs*/
 }
 
+void identify_instruction_and_reg(conf_object_t * obj, conf_object_t * cpu, logical_address_t address){ 
+    connection_t *conn = conn_of_obj(obj);
+
+    /*Your logic starts here!*/
+    //Finish an instruction in a station
+    instruction_entry * entry = get_instruction_details(obj, address);
+    get_instruction_register(obj, &entry->disassembled_text[4]);
+    reg_t * reg1 = get_instruction_register(obj, &entry->disassembled_text[4]);
+    reg_t * reg2 = get_instruction_register(obj, &entry->disassembled_text[8]);
+
+    for(int i = 0; i < conn->total_reservation_stations; ++i){ 
+        if(conn->stations[i]->in_use && conn->stations[i]->current_timeout == 0){
+            for(int j = 0; j < REG_IN_PROGRAM; ++j){
+                if(conn->register_list[j].name != NULL){
+                    if(strncmp(&conn->stations[i]->curr_inst->disassembled_text[4], conn->register_list[j].name, 3) == 0){
+                        conn->register_list[j].in_use = false;
+                    }
+                }
+            }
+            for(int k = 0; k < REG_IN_PROGRAM; ++k){
+                if(conn->register_list[k].name != NULL){
+                    if(strncmp(&conn->stations[i]->curr_inst->disassembled_text[8], conn->register_list[k].name, 2) == 0){
+                        conn->register_list[k].in_use = false;
+                    }
+                }
+            }
+            conn->restore_rip_address = address; //this is the address to restore after the station finishes the instruction
+            conn->restore_rip = true; //controls that rip should be returned to the real address after finished instruction
+            conn->finished_address = conn->stations[i]->curr_inst->address; //Address of the finished instruction
+            conn->finish = true; //tells the state machine to finish an instruction in this cycle at finished address
+            conn->stations[i]->in_use = false; //since the instruction is finised, this engine is no longer busy
+            conn->stall = false; //just in case we were stalling before
+            SIM_LOG_INFO(2, obj, 0, "I'm going to finishg here: %x and return to: %x\n, index %i",  conn->finished_address , conn->restore_rip_address , i);
+            break;
+        } 
+    }
+
+    //If I'm on the instruction that's about to finish, then we need to prioritize finish to avoid a loop
+    //Add instruction to the station and DON'T finish it
+    //you have 2 choices here, either you process the string or use the opcodes and identify the instruction
+    //the operands are most likely easier to detect as a string
+    bool available_station_load = false;
+    bool available_station_sum = false;
+    if(strncmp(entry->disassembled_text, "mov", 3) == 0) {
+        for(int i = 0; i < conn->total_reservation_stations; ++i){
+            for(int j = 0; j < REG_IN_PROGRAM; ++j){
+                if(!conn->stations[i]->in_use && conn->stations[i]->type == TYPE_LOAD){
+                    if(conn->register_list[j].name != NULL){
+                        if(strncmp(conn->register_list[j].name, reg1->name, 3)==0){
+                            if (strncmp(&entry->disassembled_text[4], reg1->name, 3)==0 && !conn->register_list[j].in_use){
+                                for(int k = 0; k < REG_IN_PROGRAM; ++k){
+                                    if(conn->register_list[k].name != NULL){
+                                        if(strncmp(conn->register_list[k].name, reg2->name, 2)==0){
+                                            if (strncmp(&entry->disassembled_text[8], reg2->name, 2)==0 && !conn->register_list[k].in_use){
+                                                conn->register_list[j].in_use = true;
+                                                conn->register_list[k].in_use = true;
+                                                conn->stations[i]->curr_inst = entry;
+                                                conn->stations[i]->in_use = true;
+                                                conn->stations[i]->current_timeout = LOAD_TIMEOUT; //we set the TIMEOUT to restart the instruction that just entered our station
+                                                available_station_load = true;
+                                                conn->skip_instruction = true; //is already in a station, do not execute yet
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if(strncmp(entry->disassembled_text, "add", 3) == 0) {
+        for(int i = 0; i < conn->total_reservation_stations; ++i){
+            for(int j = 0; j < REG_IN_PROGRAM; ++j){
+                if(!conn->stations[i]->in_use && conn->stations[i]->type == TYPE_SUM){
+                    if(conn->register_list[j].name != NULL){
+                        if(strncmp(conn->register_list[j].name, reg1->name, 3)==0){
+                            if (strncmp(&entry->disassembled_text[4], reg1->name, 3)==0 && !conn->register_list[j].in_use){
+                                for(int k = 0; k < REG_IN_PROGRAM; ++k){
+                                    if(conn->register_list[k].name != NULL){
+                                        if(strncmp(conn->register_list[k].name, reg2->name, 2)==0){
+                                            if (strncmp(&entry->disassembled_text[8], reg2->name, 2)==0 && !conn->register_list[k].in_use){
+                                                conn->register_list[j].in_use = true;
+                                                conn->register_list[k].in_use = true;
+                                                conn->stations[i]->curr_inst = entry;
+                                                conn->stations[i]->in_use = true;
+                                                conn->stations[i]->current_timeout = SUM_TIMEOUT;
+                                                available_station_sum = true;
+                                                conn->skip_instruction = true; //is already in a station, do not execute yet
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    //No station can take this instruction that was fetch, we need to stall until they free up
+    if(!available_station_sum && !available_station_load && !conn->finish){
+        SIM_LOG_INFO(1, obj, 0, "I need to stall");
+        conn->stall = true;
+        conn->stall_address = address; //we'll loop in the current RIP until some engine finished and removes the stall
+        return;
+    } 
+    /*Here you can add all the other stations that you want, they can follow the usage of the same APIs*/
+}
 
 /*
- * This function runs EVERY CYCLE and decrements the counters on each of the 
+ * This function runs EVERY CYCLE and decrements the counters on each of the units 
  * */
 void station_timers(conf_object_t * obj){
     connection_t *conn = conn_of_obj(obj);
@@ -286,9 +425,9 @@ void dealloc(conf_object_t *obj, conf_object_t *cpu, void *user_data){
 void add_finished_instruction(conf_object_t * obj, logical_address_t address){
     connection_t *conn = conn_of_obj(obj);
     //If the added instruction is already there do nothing
-    for(int i = 0; i < conn->issued_instruction_size; ++i) {
-        if(conn->issued_instructions[i].address == address){
-            conn->finished_instructions[conn->finished_instructions_size++] = &conn->issued_instructions[i];
+    for(int i = 0; i < conn->fetch_instruction_size; ++i) {
+        if(conn->fetch_instructions[i].address == address){
+            conn->finished_instructions[conn->finished_instructions_size++] = &conn->fetch_instructions[i];
             break;
         }
     }
@@ -311,12 +450,13 @@ void print_all_ordered_instructions(conf_object_t * obj){
  * restore_rip and restore_rip_address tell the CPU to restore the RIP to an original point in time if the flag is true
  * finish and finish_address: if the finish flag is set after operating over the instruction, then the next cycle will execute the instruction immediately (probably because the engine timeout expired)
  * stall and stall_address: if stall is set, the processor will stall cycles on that instruction pointer until told otherwise (probably because no stations are available)
- * skip: if skip is set, then the issued instruction is not finished immediately (probably because it's in a station)
+ * skip: if skip is set, then the fetch instruction is not finished immediately (probably because it's in a station)
  * */
 cpu_emulation_t
 tomasulo_algorithm(conf_object_t *obj, conf_object_t *cpu, void *user_data){
     connection_t *conn = conn_of_obj(obj);
     logical_address_t address = (logical_address_t)((int *)user_data);
+
     //Even if the RIP changes in between don't print current instruction pointer
     if(!conn->restore_rip && !conn->stall) {
         SIM_LOG_INFO(1, obj, 0, "Current instruction pointer is at: 0x%x", (int)address );
@@ -326,7 +466,7 @@ tomasulo_algorithm(conf_object_t *obj, conf_object_t *cpu, void *user_data){
     }
     //Entering a finish cycle, instruction pointer is in the right place, just execute
     if(conn->finish){
-        SIM_LOG_INFO(1, obj, 0, "Finished instruction: 0x%x", (int)address);
+        SIM_LOG_INFO(1, obj, 0, "Finished instruction in address: 0x%x", (int)address);
         conn->finish = false;
         add_finished_instruction(obj, address);
         print_all_ordered_instructions(obj);
@@ -352,7 +492,17 @@ tomasulo_algorithm(conf_object_t *obj, conf_object_t *cpu, void *user_data){
     //This is the most important function where YOU control the CPU model to comply with Tomasulo's algorithm
     ++conn->cycles;
     SIM_LOG_INFO(1, obj, 0, "Current CPU Cycle: %i", conn->cycles);
-    identify_instruction_and_operand(obj, cpu, address);
+    instruction_entry * entry = get_instruction_details(obj, address);
+    if(strncmp(entry->disassembled_text,"add byte",8)!=0){
+        if(REG_DEPENDENCY){
+            identify_instruction_and_reg(obj, cpu, address);
+        }else {
+            identify_instruction_and_operand(obj, cpu, address);
+        }
+    }else{
+        SIM_LOG_INFO(1, obj, 0, "Complete fetching the instructions of x86 program");
+    }
+
     //Stall the CPU
     if(conn->stall){
         conn->pi_iface->set_program_counter(cpu, conn->stall_address);
@@ -372,7 +522,7 @@ tomasulo_algorithm(conf_object_t *obj, conf_object_t *cpu, void *user_data){
 
     //We should NEVER enter this case, but to not break execution will add it here 
     if(conn->restore_rip){
-        SIM_LOG_INFO(1, obj, 0,"NOT EXPECTED: Will restore instruction pointer to: 0x%x", (int) conn->restore_rip_address);
+        SIM_LOG_INFO(2, obj, 0,"NOT EXPECTED: Will restore instruction pointer to: 0x%x", (int) conn->restore_rip_address);
         conn->restore_rip = false;
         conn->pi_iface->set_program_counter(cpu, conn->restore_rip_address); 
         return CPU_Emulation_Control_Flow; 
@@ -382,35 +532,35 @@ tomasulo_algorithm(conf_object_t *obj, conf_object_t *cpu, void *user_data){
 }
 
 /*
- * This function is called automatically, adds the instruction to the issued instruction list
+ * This function is called automatically, adds the instruction to the fetch instruction list
  * */
 void add_instruction_data(conf_object_t * obj, logical_address_t pa, char * disasm){
     connection_t *conn = conn_of_obj(obj);
     //If the added instruction is already there do nothing
-    for(int i = 0; i < conn->issued_instruction_size; ++i) {
-        if(conn->issued_instructions[i].address == pa)
+    for(int i = 0; i < conn->fetch_instruction_size; ++i) {
+        if(conn->fetch_instructions[i].address == pa)
             return;
     }
-    conn->issued_instructions[conn->issued_instruction_size].address = pa;
-    conn->issued_instructions[conn->issued_instruction_size++].disassembled_text = strdup(disasm);
+    conn->fetch_instructions[conn->fetch_instruction_size].address = pa;
+    conn->fetch_instructions[conn->fetch_instruction_size++].disassembled_text = strdup(disasm);
 }
 
 /*
- * Helper function to print all issued instructions
+ * Helper function to print all fetch instructions
  * */
 void print_all_instruction_data(conf_object_t * obj){
     connection_t *conn = conn_of_obj(obj);
-    SIM_LOG_INFO(3, obj, 0,"Trace of all issued instruction:");
-    for(int i = 0; i< conn->issued_instruction_size; ++i){
-        SIM_LOG_INFO(3, obj, 0,"Physical Address: 0x%x Dissasembly: %s", (int) conn->issued_instructions[i].address, conn->issued_instructions[i].disassembled_text);
+    SIM_LOG_INFO(3, obj, 0,"Trace of all fetch instruction:");
+    for(int i = 0; i< conn->fetch_instruction_size; ++i){
+        SIM_LOG_INFO(3, obj, 0,"Physical Address: 0x%x Dissasembly: %s", (int) conn->fetch_instructions[i].address, conn->fetch_instructions[i].disassembled_text);
     }
-    SIM_LOG_INFO(3, obj, 0,"--- end of issued instructions");
+    SIM_LOG_INFO(3, obj, 0,"--- end of fetch instructions");
 }
 
 
 
 /*
- * Here is where the CPU decoder encounters the instruction and adds it to the list of issued instructions
+ * Here is where the CPU decoder encounters the instruction and adds it to the list of fetch instructions
  *
  * You don't need to change it's code, since all the algorithm is handled elsewhere
  * */
@@ -447,9 +597,11 @@ void init_add_station(conf_object_t * obj, unit_functional_station * station){
 void init_all_stations(conf_object_t * obj){
     unit_functional_station * new_station =  MM_ZALLOC(1, unit_functional_station);
     new_station->type = TYPE_SUM;
+    new_station->current_timeout = SUM_TIMEOUT;
     init_add_station(obj, new_station);
     new_station =  MM_ZALLOC(1, unit_functional_station);
     new_station->type = TYPE_LOAD;
+    new_station->current_timeout = LOAD_TIMEOUT;
     init_add_station(obj, new_station);
     /*Here you can add stations of different types and ALWAYS call the init_add_station function to record it in the stations array so that 
      * it's decremented every cycle.
@@ -506,7 +658,7 @@ new_connection(tomasulo_t *tool, conf_object_t *provider, attr_value_t args)
         conn->stall = false;
         conn->stall_address = -1;
         conn->skip_instruction = false;
-        conn->issued_instruction_size = 0;
+        conn->fetch_instruction_size = 0;
         conn->finished_instructions_size = 0;
         conn->cycles = 0;
         init_all_stations(conn_obj);
@@ -645,4 +797,3 @@ init_local(void)
         init_tool_class();
         init_connection_class();
 }
-

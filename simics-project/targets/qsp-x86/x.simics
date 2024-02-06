@@ -1,0 +1,26 @@
+run-command-file "%script%/firststeps.simics"
+board.mb.cpu0.core[0][0].info
+run 2 s
+board.mb.phys_mem.map
+@SIM_create_object("x_device", "x", target_mem_space=conf.board.mb.phys_mem)
+
+#For further information turning all verbose for the x device
+x.log-level 4
+
+#board.mb.phys_mem.add-map x.bank.b1  0x250000000 0xc00
+#board.mb.phys_mem.map
+#print-device-regs x 
+#board.mb.phys_mem.write 0x250000004 0x3
+#board.mb.phys_mem.write 0x250000008 0x0
+#board.mb.phys_mem.write 0x250000004 0x6
+#board.mb.phys_mem.write 0x250000008 0x1
+#board.mb.phys_mem.write 0x250000040 1
+#board.mb.phys_mem.read 0x250000060
+#board.mb.phys_mem.write 0x250000004 0x5
+#board.mb.phys_mem.write 0x250000008 0x2
+#board.mb.phys_mem.write 0x250000040 2
+#board.mb.phys_mem.read 0x250000060
+#board.mb.phys_mem.write 0x250000004 0x4
+#board.mb.phys_mem.write 0x250000008 0x3
+#board.mb.phys_mem.write 0x250000040 3
+#board.mb.phys_mem.read 0x250000060

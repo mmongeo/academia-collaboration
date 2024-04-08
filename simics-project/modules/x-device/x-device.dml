@@ -1,0 +1,33 @@
+/*
+  © 2016 Intel Corporation
+*/
+
+// This is an incomplete X device module to learn how to translate 
+//specifications to dml code. 
+
+dml 1.4;
+
+device x_device;
+
+param desc = "example X device";
+
+param documentation =
+    "X device incomplete for dml workshop. Find the specification "
+    + "on the documentation";
+
+import "utility.dml";
+
+param byte_order = "little-endian";
+
+// Memory-space connection
+connect target_mem_space {
+    param documentation =
+        "The memory space on which the X device operates. Data will be "
+        + "read from and copied to the memory associated with this memory "
+        + "space.";
+    param configuration = "required";
+    interface memory_space;
+}
+
+// DML Workshop
+// Add your code HERE!

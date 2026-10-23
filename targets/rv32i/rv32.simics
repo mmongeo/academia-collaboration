@@ -1,0 +1,36 @@
+# © 2026 Intel Corporation
+#
+# This software and the related documents are Intel copyrighted materials, and
+# your use of them is governed by the express license under which they were
+# provided to you ("License"). Unless the License provides otherwise, you may
+# not use, modify, copy, publish, distribute, disclose or transmit this software
+# or the related documents without Intel's prior written permission.
+#
+# This software and the related documents are provided as is, with no express or
+# implied warranties, other than those that are expressly stated in the License.
+
+decl {
+    ! RV32I course machine: one core from modules/rv32-atomic or
+    ! modules/rv32-pipeline, RAM at address 0, and a program loaded into RAM.
+    ! Run the program with "run"; it stops at its EBREAK. rv32-atomic.simics
+    ! and rv32-pipeline.simics run this script with cpu_class set.
+
+    param cpu_class : string = "rv32-atomic"
+    ! Processor class: "rv32-atomic" or "rv32-pipeline". The core class is the
+    ! same name followed by "-core".
+    param program : file("*") or nil = "%script%/programs/all-instructions.txt"
+    ! Program to run: an assembly program (.txt), written into memory by
+    ! load_program() in the core module's txt_loader.py. NIL loads nothing.
+    param load_address : int = 0
+    ! Address the program is loaded at; execution starts there.
+    param ram_size : int = 0x100000
+    ! Size in bytes of the RAM at address 0.
+    param freq_mhz : float = 100.0
+    ! Clock frequency of the core.
+}
+
+run-script "%script%/rv32-system.py"
+
+if $program != NIL {
+    echo "RV32I course machine: " + $cpu_class + " running " + $program
+}

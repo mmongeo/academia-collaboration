@@ -1,8 +1,0 @@
-$disk0_image = "qsp-driver-support.craff"
-
-# Find the script file in the project using %simics%/
-run-command-file "%simics%/targets/qsp-x86/custom-target.simics"
-
-pci_capture.log-level 4
-
-pci_capture.dev->input = "<path-to-file>"

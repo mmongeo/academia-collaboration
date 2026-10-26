@@ -20,6 +20,7 @@
 - `rv32-atomic.c`
 - `txt_loader.py`
 - `rv32-helpers.h`
+- `rv32-helpers.c`
 - `rv32-core.h`
 - `rv32-core.c`
 
@@ -28,6 +29,7 @@
 - `rv32-pipeline.c`
 - `txt_loader.py`
 - `rv32-helpers.h`
+- `rv32-helpers.c`
 - `rv32-core.h`
 - `rv32-core.c`
 
